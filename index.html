@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta name="name" content="configure">
+  <meta name="version" content="57">
+  <meta name="revised" content="2021-08-28">
+  <meta name="copyright" content="Kay Sievers, kay@vrfy.org">
+  <meta name="license" content="Apache-2.0">
+  <meta name="rating" content="safe for kids">
+  <meta http-equiv="Content-Type" content="text/html;charset=utf-8">
+  <title>Versio Duo - configure</title>
+  <meta name="description" content="MIDI Device Configuration">
+  <link rel="canonical" href="https://versioduo.com/configure">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="thumbnail" content="icons/logo.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16x16.png">
+  <link rel="manifest" href="site.webmanifest">
+  <link rel="stylesheet" href="css/bulma.min.css">
+  <link rel="stylesheet" href="css/bulma-addons.css">
+  <link rel="stylesheet" href="css/fonts.css">
+  <link rel="stylesheet" href="css/fontawesome.min.css">
+  <style>
+    html {
+      scroll-padding-top: 3.25rem;
+      scroll-behavior: smooth;
+      overflow: auto;
+    }
+
+    body {
+      font-family: 'DIN 1451', sans-serif;
+    }
+
+    /* Avoid blue-colored Home/Brand */
+    a.navbar-home:focus {
+      color: hsl(0, 0%, 29%);
+    }
+
+    /* Do not mess with the DIN font, fake bold looks really ugly */
+    .title {
+      font-weight: 400;
+    }
+
+    section {
+      background-color: hsl(0, 0%, 92%);
+      margin-bottom: 1.5rem;
+      padding: 1rem;
+    }
+
+    section:last-of-type {
+      margin-bottom: 0;
+    }
+
+    .subsection {
+      margin-top: 2rem;
+    }
+
+    .inactive {
+      pointer-events: none;
+    }
+
+    .keyboard-button {
+      font-size: min(1rem, 1.8vw);
+      height: 2.5rem;
+      width: 100%;
+    }
+
+    .width-label {
+      width: 6rem;
+    }
+
+    .width-text {
+      width: 8rem;
+    }
+
+    .width-text-wide {
+      width: 12rem;
+    }
+
+    .width-number {
+      width: 4.5rem;
+    }
+
+    .log {
+      height: 12rem;
+      overflow: auto;
+      background-color: white;
+      padding: 1rem;
+    }
+  </style>
+</head>
+
+<body class="has-navbar-fixed-top">
+  <nav class="navbar is-fixed-top" aria-label="navigation">
+    <div class="container">
+      <div class="navbar-brand">
+        <a class="navbar-home navbar-item is-size-4" href="">
+          <img class="mr-2" src="icons/logo.png" alt="">
+          <h1>
+            configure
+          </h1>
+        </a>
+        <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false">
+          <span class="inactive" aria-hidden="true"></span>
+          <span class="inactive" aria-hidden="true"></span>
+          <span class="inactive" aria-hidden="true"></span>
+        </a>
+      </div>
+
+      <div class="navbar-menu">
+        <div class="navbar-start"></div>
+        <div class="navbar-end">
+          <a class="navbar-item" href="https://github.com/versioduo/" title="Source Code" target="software">
+            <span class="icon">
+              <i class="fab fa-github"></i>
+            </span>
+          </a>
+          <a class="navbar-item" href="https://versioduo.com" title="versioduo.com" target="home">
+            <span class="icon">
+              <i class="fas fa-home"></i>
+            </span>
+          </a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <script src="js/V2Web.js"></script>
+  <script src="js/V2Log.js"></script>
+  <script src="js/V2MIDI.js"></script>
+  <script src="js/V2MIDISelect.js"></script>
+  <script src="js/V2Device.js"></script>
+  <script src="js/V2Configuration.js"></script>
+  <script src="js/V2Settings.js"></script>
+  <script src="js/V2Input.js"></script>
+  <script src="js/V2Output.js"></script>
+  <script src="js/V2Test.js"></script>
+  <script src="js/V2Debug.js"></script>
+  <script>
+    'use strict';
+
+    {
+      // Initialize the menu.
+      V2Web.setup();
+
+      // Early logging init, we don't have a device or the web sections yet, but we already
+      // record the messages. setup() is called later to attach the log as the last web section.
+      const log = new V2Log();
+      log.print('<b>Versio Duo</b> MIDI device configuration, version <b>' + Number(document.querySelector('meta[name="version"]').content) + '</b>');
+
+      // Read commands from the URL.
+      const url = new URL(window.location);
+
+      // WebUSB exports the link to this site with the USB device name to connect to.
+      const connect = url.searchParams.get('connect');
+      if (connect) {
+        // Remove the command, it is only used for the first connection.
+        url.searchParams.delete('connect');
+        window.history.pushState({}, '', url);
+      }
+
+      // Add the sections.
+      const device = new V2Device(log, connect);
+
+      // Cache the content for offline operation.
+      V2Web.registerWorker('service-worker.js', (state, newWorker) => {
+        // There is no worker during the intial setup.
+        if (!navigator.serviceWorker.controller)
+          return;
+
+        switch (state) {
+          case 'installed':
+            // A new version was installed into the cache and a new worker is waiting to take control.
+            device.notifyUpdate('A fresh version is available', () => {
+              newWorker.postMessage({
+                type: 'skipWaiting'
+              });
+            });
+            break;
+
+          case 'activated':
+            // A new worker took control over the page.
+            location.reload();
+            break;
+        }
+      });
+
+      new V2Configuration(device);
+      new V2Input(device);
+      new V2Output(device);
+      new V2Test(device);
+      log.setup(device);
+
+      if (url.searchParams.get('debug'))
+        new V2Debug(device);
+    }
+  </script>
+</body>
+
+</html>
